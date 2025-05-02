@@ -51,7 +51,8 @@ export const GameField: React.FC<GameFieldProps> = ({
           height: `${PUCK_SIZE}px`,
           left: `calc(${puckPosition.x}% - ${PUCK_SIZE / 2}px)`,
           top: `calc(${puckPosition.y}% - ${PUCK_SIZE / 2}px)`,
-          transition: 'transform 0.05s linear',
+          // Отключаем все анимации и трансформации для предотвращения мерцания
+          transition: 'none',
           boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
         }}
       >
@@ -69,7 +70,8 @@ export const GameField: React.FC<GameFieldProps> = ({
           left: `calc(${playerPaddlePos.x}% - ${PADDLE_SIZE / 2}px)`,
           top: `calc(${playerPaddlePos.y}% - ${PADDLE_SIZE / 2}px)`,
           boxShadow: '0 3px 10px rgba(0,0,0,0.2)',
-          background: 'radial-gradient(circle at 40% 40%, #f87171, #dc2626 60%)'
+          background: 'radial-gradient(circle at 40% 40%, #f87171, #dc2626 60%)',
+          transition: 'none'
         }}
       >
         {/* Внутренняя маркировка ракетки */}
@@ -86,7 +88,8 @@ export const GameField: React.FC<GameFieldProps> = ({
           left: `calc(${opponentPaddlePos.x}% - ${PADDLE_SIZE / 2}px)`,
           top: `calc(${opponentPaddlePos.y}% - ${PADDLE_SIZE / 2}px)`,
           boxShadow: '0 3px 10px rgba(0,0,0,0.2)',
-          background: 'radial-gradient(circle at 40% 40%, #93c5fd, #2563eb 60%)'
+          background: 'radial-gradient(circle at 40% 40%, #93c5fd, #2563eb 60%)',
+          transition: 'none'
         }}
       >
         {/* Внутренняя маркировка ракетки */}
