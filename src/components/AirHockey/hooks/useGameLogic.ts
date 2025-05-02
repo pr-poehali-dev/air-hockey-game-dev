@@ -29,11 +29,24 @@ const limitVectorMagnitude = (vector: Vector2D, maxMagnitude: number): Vector2D 
   return vector;
 };
 
+// Проверка, если скорость близка к нулю, делаем точный нуль
+// чтобы избежать вечного микродвижения
+const applyThreshold = (vector: Vector2D, threshold: number = 0.001): Vector2D => {
+  const magnitude = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+  
+  if (magnitude < threshold) {
+    return { x: 0, y: 0 };
+  }
+  
+  return vector;
+};
+
 export const useGameLogic = (config: GameConfig) => {
   const [gameState, setGameState] = useState<GameState>(initialState);
   const requestRef = useRef<number>();
   const lastTimeRef = useRef<number>(0);
   const previousTimeRef = useRef<number[]>([]);
+  const lastPaddlePosRef = useRef<Vector2D | null>(null);
   const { toast } = useToast();
   
   const startGame = () => {
@@ -61,6 +74,7 @@ export const useGameLogic = (config: GameConfig) => {
   const resetGame = () => {
     setGameState(initialState);
     previousTimeRef.current = [];
+    lastPaddlePosRef.current = null;
   };
 
   const pauseGame = () => {
@@ -104,8 +118,9 @@ export const useGameLogic = (config: GameConfig) => {
       const avgDeltaTime = previousTimeRef.current.reduce((a, b) => a + b, 0) / 
                            previousTimeRef.current.length;
       
-      // Нормализуем deltaTime, чтобы игра работала стабильно на разных устройствах
-      const normalizedDeltaTime = Math.min(avgDeltaTime, 30);
+      // Нормализуем deltaTime, чтобы игра работала стабильно
+      // Ограничиваем диапазон 10-20 мс для более предсказуемой физики
+      const normalizedDeltaTime = Math.min(Math.max(avgDeltaTime, 10), 20);
 
       setGameState(prev => {
         const { 
@@ -120,19 +135,34 @@ export const useGameLogic = (config: GameConfig) => {
         
         let { puckPosition, puckVelocity, playerPaddlePos, opponentPaddlePos, playerScore, opponentScore } = prev;
         
-        // Движение шайбы с учетом трения
+        // Вычисляем скорость движения ракетки игрока
+        const paddleVelocity = lastPaddlePosRef.current 
+          ? {
+              x: (playerPaddlePos.x - lastPaddlePosRef.current.x) / normalizedDeltaTime * 0.01,
+              y: (playerPaddlePos.y - lastPaddlePosRef.current.y) / normalizedDeltaTime * 0.01
+            } 
+          : { x: 0, y: 0 };
+        
+        // Сохраняем текущую позицию ракетки для следующего кадра
+        lastPaddlePosRef.current = { ...playerPaddlePos };
+        
+        // Применяем трение - сильнее чем раньше, чтобы шайба быстрее останавливалась
         puckVelocity = {
           x: puckVelocity.x * FRICTION,
           y: puckVelocity.y * FRICTION
         };
         
+        // Если скорость очень маленькая, устанавливаем её в 0
+        puckVelocity = applyThreshold(puckVelocity);
+        
         // Применяем ограничение максимальной скорости
         puckVelocity = limitVectorMagnitude(puckVelocity, MAX_PUCK_SPEED);
         
-        // Обновление позиции шайбы с нормализованным deltaTime
+        // Обновление позиции шайбы на основе её скорости
+        // Используем меньший коэффициент, чтобы замедлить движение
         let newPuckPosition = {
-          x: puckPosition.x + puckVelocity.x * normalizedDeltaTime,
-          y: puckPosition.y + puckVelocity.y * normalizedDeltaTime
+          x: puckPosition.x + puckVelocity.x * normalizedDeltaTime * 0.5,
+          y: puckPosition.y + puckVelocity.y * normalizedDeltaTime * 0.5
         };
         
         // Проверка столкновений с боковыми бортами
@@ -181,22 +211,24 @@ export const useGameLogic = (config: GameConfig) => {
         }
         
         // Искусственный интеллект для оппонента (движение к шайбе с предсказанием)
+        // Упрощенная версия, чтобы сделать ИИ менее идеальным
         let targetX = newPuckPosition.x;
         
-        // Если шайба движется вверх, пытаемся предсказать, где она будет
-        if (puckVelocity.y < 0) {
-          const timeToReachOpponent = (opponentPaddlePos.y - newPuckPosition.y) / -puckVelocity.y;
-          if (timeToReachOpponent > 0) {
-            targetX = newPuckPosition.x + puckVelocity.x * timeToReachOpponent;
-          }
+        // Если шайба стоит или движется очень медленно, возвращаемся в центр
+        if (Math.abs(puckVelocity.x) < 0.005 && Math.abs(puckVelocity.y) < 0.005) {
+          targetX = 50;
+        }
+        // Если шайба движется вверх, пытаемся предсказать положение
+        else if (puckVelocity.y < 0) {
+          targetX = newPuckPosition.x;
         }
         
         // Добавляем небольшую случайную погрешность для более реалистичного поведения
-        targetX += (Math.random() - 0.5) * 10;
+        targetX += (Math.random() - 0.5) * 5;
         
-        // Ограничиваем движение компьютера, чтобы игрок имел шанс победить
+        // Плавное движение оппонента к цели
         const newOpponentX = opponentPaddlePos.x + (targetX - opponentPaddlePos.x) * 
-                             PADDLE_SPEED * (normalizedDeltaTime / 150);
+                             PADDLE_SPEED * (normalizedDeltaTime / 200);
         
         opponentPaddlePos = {
           x: Math.max(10, Math.min(90, newOpponentX)),
@@ -204,7 +236,7 @@ export const useGameLogic = (config: GameConfig) => {
         };
         
         // Проверка столкновений с ракетками
-        const checkCollisionWithPaddle = (paddlePos: Vector2D) => {
+        const checkCollisionWithPaddle = (paddlePos: Vector2D, isPlayer: boolean) => {
           const dx = paddlePos.x - newPuckPosition.x;
           const dy = paddlePos.y - newPuckPosition.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
@@ -214,11 +246,21 @@ export const useGameLogic = (config: GameConfig) => {
             const nx = -dx / distance;
             const ny = -dy / distance;
             
-            // Скорость ракетки (для игрока это разница с предыдущей позицией)
-            const paddleSpeed = paddlePos === playerPaddlePos ? 0.1 : 0.05;
+            // Скорость ракетки 
+            const paddleVelocityFactor = isPlayer 
+              ? Math.sqrt(paddleVelocity.x * paddleVelocity.x + paddleVelocity.y * paddleVelocity.y)
+              : 0.03; // Константная скорость для компьютера
+              
+            // Базовая скорость отскока (текущая скорость шайбы + влияние скорости ракетки)
+            let speed = Math.sqrt(puckVelocity.x * puckVelocity.x + puckVelocity.y * puckVelocity.y);
             
-            // Базовая скорость отскока (текущая скорость шайбы + бонус от скорости ракетки)
-            let speed = Math.sqrt(puckVelocity.x * puckVelocity.x + puckVelocity.y * puckVelocity.y) + paddleSpeed;
+            // Если шайба почти остановилась, даем ей минимальный импульс
+            if (speed < 0.01) {
+              speed = 0.01;
+            }
+            
+            // Добавляем скорость от движения ракетки
+            speed += paddleVelocityFactor;
             
             // Применяем множитель отскока и ограничиваем скорость
             speed = Math.min(speed * REBOUND_MULTIPLIER, MAX_PUCK_SPEED);
@@ -242,13 +284,14 @@ export const useGameLogic = (config: GameConfig) => {
         };
         
         // Сначала проверяем столкновение с игроком, затем с оппонентом
-        const hitPlayer = checkCollisionWithPaddle(playerPaddlePos);
-        const hitOpponent = !hitPlayer && checkCollisionWithPaddle(opponentPaddlePos);
+        const hitPlayer = checkCollisionWithPaddle(playerPaddlePos, true);
+        const hitOpponent = !hitPlayer && checkCollisionWithPaddle(opponentPaddlePos, false);
         
-        // Добавляем небольшую случайность в движение шайбы для более естественного поведения
+        // Добавляем очень маленькую случайность в движение шайбы 
+        // для избежания повторяющихся паттернов
         if (hitPlayer || hitOpponent) {
-          puckVelocity.x += (Math.random() - 0.5) * 0.02;
-          puckVelocity.y += (Math.random() - 0.5) * 0.02;
+          puckVelocity.x += (Math.random() - 0.5) * 0.005;
+          puckVelocity.y += (Math.random() - 0.5) * 0.005;
           
           // И снова ограничиваем максимальную скорость
           puckVelocity = limitVectorMagnitude(puckVelocity, MAX_PUCK_SPEED);
