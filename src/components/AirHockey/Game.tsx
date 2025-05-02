@@ -23,9 +23,12 @@ const AirHockeyGame: React.FC = () => {
   const gameConfig: GameConfig = {
     PADDLE_SIZE: isMobile ? 30 : 40,
     PUCK_SIZE: isMobile ? 20 : 25,
-    FRICTION: 0.98,
-    PADDLE_SPEED: 0.3,
-    COLLISION_DAMPING: 0.8
+    FRICTION: 0.985,  // Уменьшил трение для более плавного движения
+    PADDLE_SPEED: 0.35, // Увеличил скорость движения противника
+    COLLISION_DAMPING: 0.9, // Увеличил коэффициент сохранения энергии при столкновениях
+    MAX_PUCK_SPEED: 0.2, // Добавил ограничение максимальной скорости шайбы
+    INITIAL_PUCK_SPEED: 0.1, // Начальная скорость шайбы
+    REBOUND_MULTIPLIER: 1.1 // Множитель отскока от ракетки
   };
 
   // Игровая логика

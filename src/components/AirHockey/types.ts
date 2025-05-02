@@ -21,4 +21,7 @@ export interface GameConfig {
   FRICTION: number;
   PADDLE_SPEED: number;
   COLLISION_DAMPING: number;
+  MAX_PUCK_SPEED: number;  // Максимальная скорость шайбы
+  INITIAL_PUCK_SPEED: number; // Начальная скорость шайбы при старте
+  REBOUND_MULTIPLIER: number; // Множитель отскока от ракетки
 }
